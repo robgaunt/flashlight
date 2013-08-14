@@ -40,7 +40,7 @@ class MotorController(basic.LineOnlyReceiver):
     logging.debug('Controller %s sending: %s', self.serialPortAddress, line)
     if self.simulateMode:
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, line)
-      self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+\r')
+      self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+')
     else:
       basic.LineOnlyReceiver.sendLine(self, line)
 
@@ -69,7 +69,7 @@ class MotorController(basic.LineOnlyReceiver):
     # absolute positioning (not relative) and queue up the most recent command received.
     # Effectively this would drop all intermediate positoning values and make the motor always
     # move to the most recent position requested.
-    self.sendLine('!G %d %d\r' % (channel, value * 1000))
+    self.sendLine('!G %d %d' % (channel, value * 1000))
 
   def goToPosition(self, channel, value):
     """Sends a Go To Absolute Position command to the motor.
@@ -84,7 +84,7 @@ class MotorController(basic.LineOnlyReceiver):
     # TODO(robgaunt): We may actually want to use PR commands instead of P commands and translate
     # all absolute movement commands into relative commands.
     # The position counter value is permitted to range between -2000000 and 2000000.
-    self.sendLine('!P %d %d\r' % (channel, value * 2000000))
+    self.sendLine('!P %d %d' % (channel, value * 2000000))
 
   def _validateValue(self, value):
     assert value <= 1.0 and value >= -1.0, 'Invalid value: %d' % value

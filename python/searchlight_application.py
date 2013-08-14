@@ -23,8 +23,8 @@ class SearchlightApplication(object):
     self.name = name
     self.motorController = motorController
     self.oscReceiver = dispatch.Receiver()
-    self.addOscCallback("go1", self.motor_1_go)
-    self.addOscCallback("go2", self.motor_2_go)
+    self.addOscCallback("go1", self.motorOneGo)
+    self.addOscCallback("go2", self.motorTwoGo)
     # TouchOSC sends /accxyz commands hundreds of times per second with the current phone
     # accelerometer readings. This is interesting, but currently causes a LOT of logspam, so
     # blackhole them.
@@ -46,11 +46,11 @@ class SearchlightApplication(object):
     return handler
 
   @unwrap_osc
-  def motor_1_go(self, value):
+  def motorOneGo(self, value):
     self.motorController.go(1, value)
 
   @unwrap_osc
-  def motor_2_go(self, value):
+  def motorTwoGo(self, value):
     if 2 <= self.motorController.numChannels:
       self.motorController.go(2, value)
     else:
