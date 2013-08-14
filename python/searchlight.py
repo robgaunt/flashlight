@@ -12,6 +12,7 @@ __author__ = 'Rob Gaunt (robgaunt@gmail.com)'
 import argparse
 import logging
 from twisted.internet import reactor
+from twisted.python import log
 
 import motor_controller
 import searchlight_application
@@ -22,6 +23,9 @@ def configure_logging(logfile):
                       format='%(asctime)s %(levelname)-8s %(message)s',
                       filename=logfile,
                       filemode='w')
+  # Configure Twisted to log to our logfile too.
+  observer = log.PythonLoggingObserver()
+  observer.start()
 
 
 def main():
@@ -32,8 +36,9 @@ def main():
                       help='Port to listen for OSC messages.')
   parser.add_argument('--osc_name', type=str, required=True,
                       help='Prefix name for all OSC endpoints.')
-  parser.add_argument('--serial_address', type=str, required=True,
-                      help='Address of serial device to communicate with the controller.')
+  parser.add_argument('--serial_address', type=str,
+                      help=('Address of serial device to communicate with the controller. If not '
+                            'set, enters simulation mode and simply simulates commands.'))
   parser.add_argument('--controller_channels', type=int, default=1,
                       help='Number of motor control channels supported by the controller.')
   parser.add_argument('--logfile', type=str, default='/tmp/searchlight.log')
@@ -42,7 +47,7 @@ def main():
   configure_logging(args.logfile)
 
   controller = motor_controller.MotorController(
-      reactor, args.serial_address, args.controller_channels)
+      reactor, args.serial_address, args.controller_channels, simulateMode=not args.serial_address)
   searchlight_application.SearchlightApplication(
       reactor, controller, args.osc_name, args.osc_address, args.osc_listen_port)
   reactor.run()

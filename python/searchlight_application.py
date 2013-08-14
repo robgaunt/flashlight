@@ -25,6 +25,10 @@ class SearchlightApplication(object):
     self.oscReceiver = dispatch.Receiver()
     self.addOscCallback("go1", self.motor_1_go)
     self.addOscCallback("go2", self.motor_2_go)
+    # TouchOSC sends /accxyz commands hundreds of times per second with the current phone
+    # accelerometer readings. This is interesting, but currently causes a LOT of logspam, so
+    # blackhole them.
+    self.oscReceiver.addCallback("/accxyz", self.ignoreOscCommand)
     reactor.listenMulticast(
         listenPort,
         async.MulticastDatagramServerProtocol(self.oscReceiver, address),
@@ -43,11 +47,14 @@ class SearchlightApplication(object):
 
   @unwrap_osc
   def motor_1_go(self, value):
-    self.motorController.go(1, value * 1000)
+    self.motorController.go(1, value)
 
   @unwrap_osc
   def motor_2_go(self, value):
     if 2 <= self.motorController.numChannels:
-      self.motorController.go(2, value * 1000)
+      self.motorController.go(2, value)
     else:
       logging.info('Searchlight %s ignoring command to motor channel 2', self.name)
+
+  def ignoreOscCommand(self, message, address):
+    pass
