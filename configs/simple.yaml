@@ -4,6 +4,22 @@ osc_server:
 
 searchlights:
   - name: "1"
+    position:
+      latitude: 40.79704
+      longitude: -119.19889
+    zero_position:
+      latitude: 40.78639
+      longitude: -119.20647
+    target_grid:
+      upper_left:
+        latitude: 40.80075
+        longitude: -119.21187
+      upper_right:
+        latitude: 40.78249
+        longitude: -119.18758
+      lower_left:
+        latitude: 40.78990
+        longitude: -119.22544
     motor_controller:
       num_channels: 2
-      serial_port: "/dev/ttyUSB0"
+      serial_port: ""
