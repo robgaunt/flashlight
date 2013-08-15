@@ -1,57 +1,61 @@
-#!/usr/bin/python
-
-"""Executable script which runs an OSC server to control a single searchlight.
-
-Example usage:
-  ./searchlight.py --osc_name 1 --osc_address 224.0.0.1 --osc_listen_port 8888 \
-                   --serial_address /dev/ttyUSB1
-"""
-
 __author__ = 'Rob Gaunt (robgaunt@gmail.com)'
 
-import argparse
 import logging
-from twisted.internet import reactor
-from twisted.python import log
 
-import motor_controller
-import searchlight_application
+SEARCHLIGHT_NAME_ALL = "all"
 
 
-def configure_logging(logfile):
-  logging.basicConfig(level=logging.DEBUG,
-                      format='%(asctime)s %(levelname)-8s %(message)s',
-                      filename=logfile,
-                      filemode='w')
-  # Configure Twisted to log to our logfile too.
-  observer = log.PythonLoggingObserver()
-  observer.start()
+class Searchlight(object):
+  """Serves as the wiring between the OSC server and motor controller.
 
+  This registers OSC addresses with a txosc Receiver, and translates OSC commands to motor
+  controller commands.
 
-def main():
-  parser = argparse.ArgumentParser(description='OSC server to control a single searchlight.')
-  parser.add_argument('--osc_address', type=str, required=True,
-                      help='Multicast address to listen for OSC messages.')
-  parser.add_argument('--osc_listen_port', type=int, required=True,
-                      help='Port to listen for OSC messages.')
-  parser.add_argument('--osc_name', type=str, required=True,
-                      help='Prefix name for all OSC endpoints.')
-  parser.add_argument('--serial_address', type=str,
-                      help=('Address of serial device to communicate with the controller. If not '
-                            'set, enters simulation mode and simply simulates commands.'))
-  parser.add_argument('--controller_channels', type=int, default=1,
-                      help='Number of motor control channels supported by the controller.')
-  parser.add_argument('--logfile', type=str, default='/tmp/searchlight.log')
-  args = parser.parse_args()
+  All OSC addresses are of the form /<searchlight name>/<command>. Each searchlight registers for
+  addresses using both its name and the name "all". This makes it possible to send OSC commands
+  either to individual searchlights, or to all searchlights at the same time.
+  """
 
-  configure_logging(args.logfile)
+  def __init__(self, motor_controller, osc_receiver, name):
+    """Initializes a Searchlight.
 
-  controller = motor_controller.MotorController(
-      reactor, args.serial_address, args.controller_channels, simulateMode=not args.serial_address)
-  searchlight_application.SearchlightApplication(
-      reactor, controller, args.osc_name, args.osc_address, args.osc_listen_port)
-  reactor.run()
+    Args:
+      motor_controller: An instance of motor_controller.MotorController.
+      osc_receiver: An instance of txosc.dispatch.Receiver.
+      name: The name of this searchlight. Used to identify which OSC endpoints it responds to.
+    """
+    assert name != SEARCHLIGHT_NAME_ALL, 'Name %s is reserved' % SEARCHLIGHT_NAME_ALL
+    self.name = name
+    self.motor_controller = motor_controller
+    self.osc_receiver = osc_receiver
+    self.add_osc_callback("go1", self.motor_one_go)
+    self.add_osc_callback("go2", self.motor_two_go)
+    # TouchOSC sends /accxyz commands hundreds of times per second with the current phone
+    # accelerometer readings. This is interesting, but currently causes a LOT of logspam, so
+    # blackhole them.
+    self.osc_receiver.addCallback("/accxyz", self.ignore_osc_command)
 
+  def add_osc_callback(self, callback_name, callback):
+    self.osc_receiver.addCallback("/%s/%s" % (self.name, callback_name), callback)
+    self.osc_receiver.addCallback("/%s/%s" % (SEARCHLIGHT_NAME_ALL, callback_name), callback)
 
-if __name__ == '__main__':
-  main()
+  def unwrap_osc(func):
+    """Decorator for all OSC handlers."""
+    def handler(self, message, address):
+      logging.debug('Searchlight %s received %s from %s', self.name, message, address)
+      func(self, *message.getValues())
+    return handler
+
+  @unwrap_osc
+  def motor_one_go(self, value):
+    self.motor_controller.go(1, value)
+
+  @unwrap_osc
+  def motor_two_go(self, value):
+    if 2 <= self.motor_controller.num_channels:
+      self.motor_controller.go(2, value)
+    else:
+      logging.info('Searchlight %s ignoring command to motor channel 2', self.name)
+
+  def ignore_osc_command(self, message, address):
+    pass

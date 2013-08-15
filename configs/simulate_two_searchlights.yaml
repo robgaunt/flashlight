@@ -1,0 +1,14 @@
+osc_server:
+  address: 224.0.0.1
+  port: 8888
+
+searchlights:
+  - name: "1"
+    motor_controller:
+      num_channels: 2
+      serial_port: ""
+
+  - name: "2"
+    motor_controller:
+      num_channels: 2
+      serial_port: ""
