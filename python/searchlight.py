@@ -22,8 +22,8 @@ class Grid(object):
 
   def transform(self, x, y):
     return (
-        (self.lr_lat - self.ul_lat) * x  + (self.ur_lat - self.ul_lat) * y + self.ul_lat,
-        (self.lr_long - self.ul_long) * x + (self.ur_long - self.ul_long) * y + self.ul_long)
+        (self.ll_lat - self.ul_lat) * x  + (self.ur_lat - self.ul_lat) * y + self.ul_lat,
+        (self.ll_long - self.ul_long) * x + (self.ur_long - self.ul_long) * y + self.ul_long)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -38,6 +38,7 @@ def haversine(lat1, lon1, lat2, lon2):
   c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
   # Approximate radius of earth, in meters, at 40 degrees latitude.
   return 6373000 * c
+
 
 
 class Searchlight(object):
@@ -103,8 +104,13 @@ class Searchlight(object):
     a = haversine(self.zpos_lat, self.zpos_lon, latitude, longitude)
     b = self.distance_to_zero
     c = haversine(latitude, longitude, self.pos_lat, self.pos_lon)
-    logging.debug('dist a %s b %s c %s', a, b, c)
-    rotation_angle = math.acos((b ** 2 + c ** 2 - a ** 2) / (2 * b * c ))
+    # Calculate sign of rotation angle by determining whether target is to the left or right of a
+    # line drawn from position to zero_position.
+    rotation_sign = latitude - self.pos_lat - (longitude - self.pos_lon) * (
+        (self.zpos_lat - self.pos_lat) / (self.zpos_lon - self.pos_lon))
+    # Law of Cosines
+    rotation_angle = math.copysign(
+        math.acos((b ** 2 + c ** 2 - a ** 2) / (2 * b * c )), rotation_sign)
     elevation_angle = math.atan(altitude / c)
     self.target_angle(rotation_angle, elevation_angle)
 
