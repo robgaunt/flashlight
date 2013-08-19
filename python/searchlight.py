@@ -7,23 +7,29 @@ SEARCHLIGHT_NAME_ALL = "all"
 RADIANS_TO_DEGREES = 57.2957795
 DEGREES_TO_RADIANS = 1 / RADIANS_TO_DEGREES
 MAX_ELEVATION = 1000
+RADIUS_OF_EARTH_METERS = 6373000  # At 40 degrees latitude.
+
+# The motor controller channel which controls azimuth or elevation angle.
+AZIMUTH_CHANNEL = 1
+ELEVATION_CHANNEL = 2
+
+POSITIONING_MODE_DIRECT = 'direct'
+POSITIONING_MODE_MIRROR = 'mirror'  # Not yet implemented.
+SUPPORTED_POSITIONING_MODES = (POSITIONING_MODE_DIRECT,)
 
 
-class Grid(object):
-  """Helper class for doing affine tranformations."""
+class TargetGrid(object):
+  """Helper class which performs an affine transformation from OSC xy grid to a target grid."""
 
   def __init__(self, upper_left, upper_right, lower_left):
-    self.ul_lat = upper_left['latitude']
-    self.ul_long = upper_left['longitude']
-    self.ur_lat = upper_right['latitude']
-    self.ur_long = upper_right['longitude']
-    self.ll_lat = lower_left['latitude']
-    self.ll_long = lower_left['longitude']
+    self.ul_lat, self.ul_lon = upper_left
+    self.ur_lat, self.ur_lon = upper_right
+    self.ll_lat, self.ll_lon = lower_left
 
   def transform(self, x, y):
     return (
-        (self.ll_lat - self.ul_lat) * x  + (self.ur_lat - self.ul_lat) * y + self.ul_lat,
-        (self.ll_long - self.ul_long) * x + (self.ur_long - self.ul_long) * y + self.ul_long)
+        (self.ll_lat - self.ul_lat) * x + (self.ur_lat - self.ul_lat) * y + self.ul_lat,
+        (self.ll_lon - self.ul_lon) * x + (self.ur_lon - self.ul_lon) * y + self.ul_lon)
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -36,9 +42,16 @@ def haversine(lat1, lon1, lat2, lon2):
   dlat = lat2 - lat1
   a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * (math.sin(dlon / 2) ** 2)
   c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-  # Approximate radius of earth, in meters, at 40 degrees latitude.
-  return 6373000 * c
+  return RADIUS_OF_EARTH_METERS * c
 
+
+def clamp_and_scale(value, min_value, max_value, scaled_min, scaled_max):
+  if value < min_value:
+    value = min_value
+  elif value > max_value:
+    value = max_value
+  return (
+      float(scaled_max - scaled_min) * (value - min_value) / (max_value - min_value) + scaled_min)
 
 
 class Searchlight(object):
@@ -53,16 +66,17 @@ class Searchlight(object):
   """
 
   def __init__(
-      self, motor_controller, osc_receiver, name,
-      position=None, zero_position=None, target_grid=None):
+      self, motor_controller, osc_receiver, name, positioning_mode,
+      position=None, zero_position=None, target_grid=None,
+      azimuth_angle_bound=None, elevation_angle_bound=None):
     """Initializes a Searchlight.
 
     Args:
       motor_controller: An instance of motor_controller.MotorController.
       osc_receiver: An instance of txosc.dispatch.Receiver.
       name: The name of this searchlight. Used to identify which OSC endpoints it responds to.
-      position: The position of the searchlight - a dictionary containing 'latitude' and
-        'longitude' floating point values representing degrees.
+      position: A latitude, longitude pair (in floating-point degrees) representing the position
+        of the searchlight.
       zero_position: The position at which the searchlight points when the motor is at position
         zero.
       target_grid: A grid defined by upper_left, upper_right, lower_left positions.
@@ -71,31 +85,43 @@ class Searchlight(object):
     self.name = name
     self.motor_controller = motor_controller
     self.osc_receiver = osc_receiver
-    self.add_osc_callback('go1', self.osc_go_one)
-    self.add_osc_callback('go2', self.osc_go_two)
+
+    # Add standard OSC callbacks.
+    self.add_osc_callback('raw_elevation', self.osc_raw_elevation)
+    self.add_osc_callback('raw_azimuth', self.osc_raw_azimuth)
+    # These seem to be invoked when the user stops dragging on a slider. Ignore them.
+    self.add_osc_callback('raw_elevation/z', self.osc_ignore)
+    self.add_osc_callback('raw_azimuth/z', self.osc_ignore)
     # TouchOSC sends /accxyz commands hundreds of times per second with the current phone
     # accelerometer readings. This is interesting, but currently causes a LOT of logspam, so
-    # blackhole them.
+    # blackhole them. We also don't care about pings.
     self.osc_receiver.addCallback('/accxyz', self.osc_ignore)
+    self.osc_receiver.addCallback('/ping', self.osc_ignore)
+
+    assert positioning_mode in SUPPORTED_POSITIONING_MODES, 'Invalid mode %s' % positioning_mode
+    self.positioning_mode = positioning_mode
+
+    self.azimuth_degrees_min, self.azimuth_degrees_max = azimuth_angle_bound
+    self.elevation_degrees_min, self.elevation_degrees_max = elevation_angle_bound
+
+    # The rest of the configuration parameters are optional.
+    # position and zero_psition are needed if you want to target a specific location.
     if position:
-      self.pos_lat = position['latitude']
-      self.pos_lon = position['longitude']
+      self.pos_lat, self.pos_lon = position
     if zero_position:
-      self.zpos_lat = zero_position['latitude']
-      self.zpos_lon = zero_position['longitude']
+      self.zpos_lat, self.zpos_lon = zero_position
     if position and zero_position:
       self.distance_to_zero = haversine(self.pos_lat, self.pos_lon, self.zpos_lat, self.zpos_lon)
+
+    # target_grid is needed if you want to map the OSC target grid to a real location, so we only
+    # add the appropriate OSC callbacks if it is specified.
     if target_grid:
-      self.target_grid = Grid(**target_grid)
+      self.target_grid = TargetGrid(**target_grid)
       self.add_osc_callback('grid', self.osc_grid)
       self.add_osc_callback('grid_elevation', self.osc_grid_elevation)
       self.last_elevation = 0
       self.last_target_lat = self.zpos_lat
       self.last_target_lon = self.zpos_lon
-
-  def add_osc_callback(self, callback_name, callback):
-    self.osc_receiver.addCallback('/%s/%s' % (self.name, callback_name), callback)
-    self.osc_receiver.addCallback('/%s/%s' % (SEARCHLIGHT_NAME_ALL, callback_name), callback)
 
   def target_position(self, latitude, longitude, altitude):
     """Aims the searchlight to target given position, specified by coordinates and altitude."""
@@ -114,12 +140,25 @@ class Searchlight(object):
     elevation_angle = math.atan(altitude / c)
     self.target_angle(rotation_angle, elevation_angle)
 
-  def target_angle(self, rotation, elevation):
-    """Aims the searchlight at given rotation and elevation angle, relative to zero."""
-    logging.debug(
-        'target_angle: rotation %s elevation %s',
-        RADIANS_TO_DEGREES * rotation, RADIANS_TO_DEGREES * elevation)
-    # TODO - translate into motor command
+  def target_angle(self, azimuth, elevation):
+    """Aims the searchlight at given azimuth and elevation angle, relative to zero."""
+    azimuth_degrees = azimuth * RADIANS_TO_DEGREES
+    elevation_degrees = elevation * RADIANS_TO_DEGREES
+    logging.debug('target_angle: azimuth %s elevation %s', azimuth_degrees, elevation_degrees)
+    if self.positioning_mode == POSITIONING_MODE_DIRECT:
+      azimuth_motor_position = clamp_and_scale(
+          azimuth_degrees, self.azimuth_degrees_min, self.azimuth_degrees_max, -1, 1)
+      self.motor_controller.go(AZIMUTH_CHANNEL, azimuth_motor_position)
+      elevation_motor_position = clamp_and_scale(
+          elevation_degrees, self.elevation_degrees_min, self.elevation_degrees_max, -1, 1)
+      self.motor_controller.go(ELEVATION_CHANNEL, elevation_motor_position)
+    else:
+      # TODO(robgaunt): Implement mirror positioning.
+      raise AssertionError('Invalid positioning mode.')
+
+  def add_osc_callback(self, callback_name, callback):
+    self.osc_receiver.addCallback('/%s/%s' % (self.name, callback_name), callback)
+    self.osc_receiver.addCallback('/%s/%s' % (SEARCHLIGHT_NAME_ALL, callback_name), callback)
 
   def unwrap_osc(func):
     """Decorator for all OSC handlers."""
@@ -129,17 +168,14 @@ class Searchlight(object):
     return handler
 
   @unwrap_osc
-  def osc_go_one(self, value):
-    assert -1 <= value and value <= 1, 'Invalid osc_go_one value: %s' % value
-    self.motor_controller.go(1, value)
+  def osc_raw_elevation(self, value):
+    assert 0 <= value and value <= 1, 'Invalid osc_raw_elevation value: %s' % value
+    self.motor_controller.go(ELEVATION_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
 
   @unwrap_osc
-  def osc_go_two(self, value):
-    assert -1 <= value and value <= 1, 'Invalid osc_go_two value: %s' % value
-    if 2 <= self.motor_controller.num_channels:
-      self.motor_controller.go(2, value)
-    else:
-      logging.info('Searchlight %s ignoring command to motor channel 2', self.name)
+  def osc_raw_azimuth(self, value):
+    assert 0 <= value and value <= 1, 'Invalid osc_raw_azimuth value: %s' % value
+    self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
 
   @unwrap_osc
   def osc_grid(self, x, y):

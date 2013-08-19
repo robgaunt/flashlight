@@ -14,21 +14,11 @@ import pprint
 from txosc import async
 from txosc import dispatch
 from twisted.internet import reactor
-from twisted.python import log
 import yaml
 
+import logging_common
 import motor_controller
 import searchlight
-
-
-def configure_logging(logfile):
-  logging.basicConfig(level=logging.DEBUG,
-                      format='%(asctime)s %(levelname)-8s %(message)s',
-                      filename=logfile,
-                      filemode='w')
-  # Configure Twisted to log to our logfile too.
-  observer = log.PythonLoggingObserver()
-  observer.start()
 
 
 def main():
@@ -36,10 +26,10 @@ def main():
       description='OSC server to control some number of searchlights.')
   parser.add_argument('--config_file', type=argparse.FileType(), required=True,
                       help='YAML config file specifying how the searchlights are set up.')
-  parser.add_argument('--logfile', type=str, default='/tmp/searchlight.log')
+  logging_common.add_logging_args(parser)
   args = parser.parse_args()
 
-  configure_logging(args.logfile)
+  logging_common.configure_logging_from_args(args)
 
   config = yaml.load(args.config_file)
   logging.info('Got config file: %s', pprint.pformat(config))
