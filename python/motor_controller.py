@@ -5,7 +5,7 @@ import logging
 from twisted.internet import serialport
 from twisted.protocols import basic
 
-SIMULATION_DELAY_SECONDS = 0.5
+SIMULATION_DELAY_SECONDS = 0.2
 
 
 class MotorController(basic.LineOnlyReceiver):
@@ -105,7 +105,7 @@ class MotorController(basic.LineOnlyReceiver):
     # Didn't find an existing !G command to replace, so send a new one.
     self.sendCommand(command)
 
-  def write_variable(self, variable, value):
+  def write_variable(self, variable, value, callback=None):
     """Writes a variable to user flash. This variable will be persisted across restarts."""
     self.sendCommand('^EE %d %d' % (variable, value), callback=callback)
     self.sendCommand('%eesav', callback=callback)

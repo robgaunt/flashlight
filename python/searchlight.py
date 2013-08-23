@@ -67,7 +67,7 @@ class Searchlight(object):
 
   def __init__(
       self, motor_controller, osc_receiver, name, positioning_mode,
-      position=None, zero_position=None, target_grid=None,
+      position=None, zero_position=None, target_grid=None, draw_grid=None
       azimuth_angle_bound=None, elevation_angle_bound=None):
     """Initializes a Searchlight.
 
@@ -122,6 +122,10 @@ class Searchlight(object):
       self.last_elevation = 0
       self.last_target_lat = self.zpos_lat
       self.last_target_lon = self.zpos_lon
+
+    if draw_grid:
+      self.draw_grid = draw_grid
+      self.add_osc_callback('draw_grid', self.osc_draw_grid)
 
   def target_position(self, latitude, longitude, altitude):
     """Aims the searchlight to target given position, specified by coordinates and altitude."""
@@ -189,6 +193,12 @@ class Searchlight(object):
     assert 0 <= elevation and elevation <= 1, 'Invalid osc_grid_elevation: %s' % elevation
     self.last_elevation = elevation * MAX_ELEVATION
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
+
+  @unwrap_osc
+  def osc_draw_grid(self, azimuth, elevation):
+    azimuth_angle = self.clamp_and_scale(azimuth, 0, 1, *self.draw_grid['azimuth_angle_bound'])
+    elevation_angle = self.clamp_and_scale(elevation, 0, 1, *self.draw_grid['elevation_angle_bound'])
+    self.target_angle(azimuth_angle * DEGREES_TO_RADIANS, elevation_angle * DEGREES_TO_RADIANS)
 
   def osc_ignore(self, message, address):
     pass

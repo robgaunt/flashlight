@@ -11,6 +11,9 @@ searchlights:
       upper_left: [40.80075, -119.21187]
       upper_right: [40.78249, -119.18758]
       lower_left: [40.78990, -119.22544]
+    draw_grid:
+      azimuth_angle_bound: [-30, 30]
+      elevation_angle_bound: [35, 65]
     azimuth_angle_bound: [-90, 90]
     elevation_angle_bound: [0, 90]
     motor_controller:
