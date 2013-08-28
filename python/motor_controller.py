@@ -5,7 +5,7 @@ import logging
 from twisted.internet import serialport
 from twisted.protocols import basic
 
-SIMULATION_DELAY_SECONDS = 0.2
+SIMULATION_DELAY_SECONDS = 0.1
 
 
 class MotorController(basic.LineOnlyReceiver):
@@ -42,6 +42,9 @@ class MotorController(basic.LineOnlyReceiver):
       serialport.SerialPort(self, serial_port, reactor, baudrate='115200')
 
   def sendCommand(self, command, callback=None):
+    logging.debug('Controller %s sending: %s', self.serial_port, command)
+    basic.LineOnlyReceiver.sendLine(self, command)
+    return
     self.command_queue.append((command, callback))
     if len(self.command_queue) == 1:
       self.sendNextCommand()
@@ -56,6 +59,8 @@ class MotorController(basic.LineOnlyReceiver):
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+')
 
   def lineReceived(self, line):
+    logging.debug('Controller %s read line: %s', self.serial_port, line)
+    return
     if not line:
       return
     if self.pending_response:
@@ -96,11 +101,12 @@ class MotorController(basic.LineOnlyReceiver):
       # callback.
       # Note that position i = 0 represents a command which has already been sent and is awaiting
       # a response.
-      if i and existing_command.startswith('!G'):
-        # Just replace it.
-        logging.debug('Replacing command %s with %s', existing_command, command)
-        self.command_queue[i] = (command, None)
-        return
+      command_prefix = '!G %d' % channel
+      # if i and existing_command.startswith(command_prefix):
+      #   # Just replace it.
+      #   logging.debug('Replacing command %s with %s', existing_command, command)
+      #   self.command_queue[i] = (command, None)
+      #   return
 
     # Didn't find an existing !G command to replace, so send a new one.
     self.sendCommand(command)
