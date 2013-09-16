@@ -17,6 +17,8 @@ POSITIONING_MODE_DIRECT = 'direct'
 POSITIONING_MODE_MIRROR = 'mirror'  # Not yet implemented.
 SUPPORTED_POSITIONING_MODES = (POSITIONING_MODE_DIRECT, POSITIONING_MODE_MIRROR)
 
+ELEVATION_FACTOR = 1
+
 
 class TargetGrid(object):
   """Helper class which performs an affine transformation from OSC xy grid to a target grid."""
@@ -120,6 +122,8 @@ class Searchlight(object):
       self.add_osc_callback('draw_grid', self.osc_draw_grid)
       # TouchOSC
       self.add_osc_callback('draw_grid_reversed', self.osc_draw_grid_reversed)
+    self.add_osc_callback('draw_grid_new', self.osc_draw_grid_new)
+    self.add_osc_callback('draw_grid_new_reversed', self.osc_draw_grid_new_reversed)
 
   def target_position(self, latitude, longitude, altitude):
     """Aims the searchlight to target given position, specified by coordinates and altitude."""
@@ -194,7 +198,7 @@ class Searchlight(object):
     self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
 
   @unwrap_osc
-  def osc_grid(self, x, y):
+  def osc_grid(self, y, x):
     assert 0 <= x and x <= 1, 'Invalid osc_grid x: %s' % x
     assert 0 <= y and y <= 1, 'Invalid osc_grid y: %s' % y
     self.last_target_lat, self.last_target_lon = self.target_grid.transform(x, y)
@@ -211,6 +215,21 @@ class Searchlight(object):
     azimuth_angle = clamp_and_scale(azimuth, 0, 1, *self.draw_grid['azimuth_angle_bound'])
     elevation_angle = clamp_and_scale(elevation, 0, 1, *self.draw_grid['elevation_angle_bound'])
     self.target_angle(azimuth_angle * DEGREES_TO_RADIANS, elevation_angle * DEGREES_TO_RADIANS)
+
+  @unwrap_osc
+  def osc_draw_grid_new(self, x, y):
+    x -= 0.5
+    azimuth_angle = math.atan(x / y)
+    elevation_angle = math.atan(ELEVATION_FACTOR / math.sqrt(x * x + y * y))
+    self.target_angle(azimuth_angle, elevation_angle)
+
+  @unwrap_osc
+  def osc_draw_grid_new_reversed(self, y, x):
+    x -= 0.5
+    y += 0.1
+    azimuth_angle = math.atan(x / y)
+    elevation_angle = math.atan(ELEVATION_FACTOR / math.sqrt(x * x + y * y))
+    self.target_angle(azimuth_angle, elevation_angle)
 
   @unwrap_osc
   def osc_draw_grid_reversed(self, elevation, azimuth):

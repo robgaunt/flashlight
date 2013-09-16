@@ -42,9 +42,6 @@ class MotorController(basic.LineOnlyReceiver):
       serialport.SerialPort(self, serial_port, reactor, baudrate='115200')
 
   def sendCommand(self, command, callback=None):
-    logging.debug('Controller %s sending: %s', self.serial_port, command)
-    basic.LineOnlyReceiver.sendLine(self, command)
-    return
     self.command_queue.append((command, callback))
     if len(self.command_queue) == 1:
       self.sendNextCommand()
@@ -54,29 +51,35 @@ class MotorController(basic.LineOnlyReceiver):
     if not self.simulate:
       logging.debug('Controller %s sending: %s', self.serial_port, command)
       basic.LineOnlyReceiver.sendLine(self, command)
+      self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.commandComplete)
     else:
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, command)
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+')
 
+  def commandComplete(self):
+    self.command_queue.popleft()
+    if self.command_queue:
+      self.sendNextCommand();
+
   def lineReceived(self, line):
     logging.debug('Controller %s read line: %s', self.serial_port, line)
     return
-    if not line:
-      return
-    if self.pending_response:
-      self.pending_response = False
-      command, callback = self.command_queue.popleft()
-      logging.debug('Controller %s Command %s Response %s', self.serial_port, command, line)
-      if callback:
-        callback(line)
-      if self.command_queue:
-        self.sendNextCommand()
-    elif line == self.command_queue[0][0]:
-      logging.debug('Controller %s awaiting response for %s',
-                    self.serial_port, self.command_queue[0][0])
-      self.pending_response = True
-    else:
-      logging.debug('Controller %s read unexpected line: %s', self.serial_port, line)
+    # if not line:
+    #   return
+    # if self.pending_response:
+    #   self.pending_response = False
+    #   command, callback = self.command_queue.popleft()
+    #   logging.debug('Controller %s Command %s Response %s', self.serial_port, command, line)
+    #   if callback:
+    #     callback(line)
+    #   if self.command_queue:
+    #     self.sendNextCommand()
+    # elif line == self.command_queue[0][0]:
+    #   logging.debug('Controller %s awaiting response for %s',
+    #                 self.serial_port, self.command_queue[0][0])
+    #   self.pending_response = True
+    # else:
+    #   logging.debug('Controller %s read unexpected line: %s', self.serial_port, line)
 
   def connectionFailed(self):
     # TODO(robgaunt): error handling
@@ -102,11 +105,11 @@ class MotorController(basic.LineOnlyReceiver):
       # Note that position i = 0 represents a command which has already been sent and is awaiting
       # a response.
       command_prefix = '!G %d' % channel
-      # if i and existing_command.startswith(command_prefix):
-      #   # Just replace it.
-      #   logging.debug('Replacing command %s with %s', existing_command, command)
-      #   self.command_queue[i] = (command, None)
-      #   return
+      if i and existing_command.startswith(command_prefix):
+        # Just replace it.
+        logging.debug('Replacing command %s with %s', existing_command, command)
+        self.command_queue[i] = (command, None)
+        return
 
     # Didn't find an existing !G command to replace, so send a new one.
     self.sendCommand(command)
