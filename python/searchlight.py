@@ -67,7 +67,7 @@ class Searchlight(object):
 
   def __init__(
       self, motor_controller, osc_receiver, name, positioning_mode,
-      position=None, zero_position=None, target_grid=None, draw_grid=None
+      position=None, zero_position=None, target_grid=None, draw_grid=None,
       azimuth_angle_bound=None, elevation_angle_bound=None):
     """Initializes a Searchlight.
 
