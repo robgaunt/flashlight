@@ -111,8 +111,8 @@ class Searchlight(object):
     # add the appropriate OSC callbacks if it is specified.
     if target_grid:
       self.target_grid = TargetGrid(**target_grid)
-      self.add_osc_callback('grid', self.osc_grid)
-      self.add_osc_callback('grid_elevation', self.osc_grid_elevation)
+      self.add_osc_callback('target_grid', self.osc_target_grid)
+      self.add_osc_callback('target_grid_elevation', self.osc_target_grid_elevation)
       self.last_elevation = 0
       self.last_target_lat = self.zpos_lat
       self.last_target_lon = self.zpos_lon
@@ -196,15 +196,15 @@ class Searchlight(object):
     self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
 
   @unwrap_osc
-  def osc_grid(self, y, x):
-    assert 0 <= x and x <= 1, 'Invalid osc_grid x: %s' % x
-    assert 0 <= y and y <= 1, 'Invalid osc_grid y: %s' % y
+  def osc_target_grid(self, y, x):
+    assert 0 <= x and x <= 1, 'Invalid osc_target_grid x: %s' % x
+    assert 0 <= y and y <= 1, 'Invalid osc_target_grid y: %s' % y
     self.last_target_lat, self.last_target_lon = self.target_grid.transform(x, y)
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
 
   @unwrap_osc
-  def osc_grid_elevation(self, elevation):
-    assert 0 <= elevation and elevation <= 1, 'Invalid osc_grid_elevation: %s' % elevation
+  def osc_target_grid_elevation(self, elevation):
+    assert 0 <= elevation and elevation <= 1, 'Invalid osc_target_grid_elevation: %s' % elevation
     self.last_elevation = elevation * MAX_ELEVATION
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
 
