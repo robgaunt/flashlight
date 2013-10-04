@@ -120,10 +120,8 @@ class Searchlight(object):
     if draw_grid:
       self.draw_grid = draw_grid
       self.add_osc_callback('draw_grid', self.osc_draw_grid)
-      # TouchOSC
-      self.add_osc_callback('draw_grid_reversed', self.osc_draw_grid_reversed)
-    self.add_osc_callback('draw_grid_new', self.osc_draw_grid_new)
-    self.add_osc_callback('draw_grid_new_reversed', self.osc_draw_grid_new_reversed)
+      # TouchOSC is a bit weird in that its grid control sends (y, x) instead of (x, y).
+      self.add_osc_callback('draw_grid_yx', self.osc_draw_grid_yx)
 
   def target_position(self, latitude, longitude, altitude):
     """Aims the searchlight to target given position, specified by coordinates and altitude."""
@@ -210,32 +208,19 @@ class Searchlight(object):
     self.last_elevation = elevation * MAX_ELEVATION
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
 
-  @unwrap_osc
-  def osc_draw_grid(self, azimuth, elevation):
-    azimuth_angle = clamp_and_scale(azimuth, 0, 1, *self.draw_grid['azimuth_angle_bound'])
-    elevation_angle = clamp_and_scale(elevation, 0, 1, *self.draw_grid['elevation_angle_bound'])
-    self.target_angle(azimuth_angle * DEGREES_TO_RADIANS, elevation_angle * DEGREES_TO_RADIANS)
-
-  @unwrap_osc
-  def osc_draw_grid_new(self, x, y):
+  def _osc_draw_grid(self, x, y):
     x -= 0.5
     azimuth_angle = math.atan(x / y)
     elevation_angle = math.atan(ELEVATION_FACTOR / math.sqrt(x * x + y * y))
     self.target_angle(azimuth_angle, elevation_angle)
 
   @unwrap_osc
-  def osc_draw_grid_new_reversed(self, y, x):
-    x -= 0.5
-    y += 0.1
-    azimuth_angle = math.atan(x / y)
-    elevation_angle = math.atan(ELEVATION_FACTOR / math.sqrt(x * x + y * y))
-    self.target_angle(azimuth_angle, elevation_angle)
+  def osc_draw_grid(self, x, y):
+    self._osc_draw_grid(x, y)
 
   @unwrap_osc
-  def osc_draw_grid_reversed(self, elevation, azimuth):
-    azimuth_angle = clamp_and_scale(azimuth, 0, 1, *self.draw_grid['azimuth_angle_bound'])
-    elevation_angle = clamp_and_scale(elevation, 0, 1, *self.draw_grid['elevation_angle_bound'])
-    self.target_angle(azimuth_angle * DEGREES_TO_RADIANS, elevation_angle * DEGREES_TO_RADIANS)
+  def osc_draw_grid_yx(self, y, x):
+    self._osc_draw_grid(x, y)
 
   def osc_ignore(self, message, address):
     pass

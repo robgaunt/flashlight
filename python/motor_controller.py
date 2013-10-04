@@ -8,6 +8,10 @@ from twisted.protocols import basic
 SIMULATION_DELAY_SECONDS = 0.1
 
 
+# Improvement to robustness:
+# Wait up until 0.15 seconds for controller to ack command
+# Otherwise pop queue, send next command, invoke failure handler
+
 class MotorController(basic.LineOnlyReceiver):
   """Communicates with the Roboteq motor controller using a line-based protocol.
 
@@ -51,7 +55,6 @@ class MotorController(basic.LineOnlyReceiver):
     if not self.simulate:
       logging.debug('Controller %s sending: %s', self.serial_port, command)
       basic.LineOnlyReceiver.sendLine(self, command)
-      self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.commandComplete)
     else:
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, command)
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+')
@@ -63,23 +66,22 @@ class MotorController(basic.LineOnlyReceiver):
 
   def lineReceived(self, line):
     logging.debug('Controller %s read line: %s', self.serial_port, line)
-    return
-    # if not line:
-    #   return
-    # if self.pending_response:
-    #   self.pending_response = False
-    #   command, callback = self.command_queue.popleft()
-    #   logging.debug('Controller %s Command %s Response %s', self.serial_port, command, line)
-    #   if callback:
-    #     callback(line)
-    #   if self.command_queue:
-    #     self.sendNextCommand()
-    # elif line == self.command_queue[0][0]:
-    #   logging.debug('Controller %s awaiting response for %s',
-    #                 self.serial_port, self.command_queue[0][0])
-    #   self.pending_response = True
-    # else:
-    #   logging.debug('Controller %s read unexpected line: %s', self.serial_port, line)
+    if not line:
+      return
+    if self.pending_response:
+      self.pending_response = False
+      command, callback = self.command_queue.popleft()
+      logging.debug('Controller %s Command %s Response %s', self.serial_port, command, line)
+      if callback:
+        callback(line)
+      if self.command_queue:
+        self.sendNextCommand()
+    elif self.command_queue and line == self.command_queue[0][0]:
+      logging.debug('Controller %s awaiting response for %s',
+                    self.serial_port, self.command_queue[0][0])
+      self.pending_response = True
+    else:
+      logging.debug('Controller %s read unexpected line: %s', self.serial_port, line)
 
   def connectionFailed(self):
     # TODO(robgaunt): error handling
