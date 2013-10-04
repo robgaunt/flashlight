@@ -5,8 +5,12 @@ import logging
 from twisted.internet import serialport
 from twisted.protocols import basic
 
-SIMULATION_DELAY_SECONDS = 0.2
+SIMULATION_DELAY_SECONDS = 0.1
 
+
+# Improvement to robustness:
+# Wait up until 0.15 seconds for controller to ack command
+# Otherwise pop queue, send next command, invoke failure handler
 
 class MotorController(basic.LineOnlyReceiver):
   """Communicates with the Roboteq motor controller using a line-based protocol.
@@ -55,7 +59,13 @@ class MotorController(basic.LineOnlyReceiver):
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, command)
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+')
 
+  def commandComplete(self):
+    self.command_queue.popleft()
+    if self.command_queue:
+      self.sendNextCommand();
+
   def lineReceived(self, line):
+    logging.debug('Controller %s read line: %s', self.serial_port, line)
     if not line:
       return
     if self.pending_response:
@@ -66,7 +76,7 @@ class MotorController(basic.LineOnlyReceiver):
         callback(line)
       if self.command_queue:
         self.sendNextCommand()
-    elif line == self.command_queue[0][0]:
+    elif self.command_queue and line == self.command_queue[0][0]:
       logging.debug('Controller %s awaiting response for %s',
                     self.serial_port, self.command_queue[0][0])
       self.pending_response = True
@@ -96,7 +106,8 @@ class MotorController(basic.LineOnlyReceiver):
       # callback.
       # Note that position i = 0 represents a command which has already been sent and is awaiting
       # a response.
-      if i and existing_command.startswith('!G'):
+      command_prefix = '!G %d' % channel
+      if i and existing_command.startswith(command_prefix):
         # Just replace it.
         logging.debug('Replacing command %s with %s', existing_command, command)
         self.command_queue[i] = (command, None)

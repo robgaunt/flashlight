@@ -6,7 +6,7 @@ import math
 SEARCHLIGHT_NAME_ALL = "all"
 RADIANS_TO_DEGREES = 57.2957795
 DEGREES_TO_RADIANS = 1 / RADIANS_TO_DEGREES
-MAX_ELEVATION = 1000
+MAX_ELEVATION = 2000
 RADIUS_OF_EARTH_METERS = 6373000  # At 40 degrees latitude.
 
 # The motor controller channel which controls azimuth or elevation angle.
@@ -15,7 +15,9 @@ ELEVATION_CHANNEL = 2
 
 POSITIONING_MODE_DIRECT = 'direct'
 POSITIONING_MODE_MIRROR = 'mirror'  # Not yet implemented.
-SUPPORTED_POSITIONING_MODES = (POSITIONING_MODE_DIRECT,)
+SUPPORTED_POSITIONING_MODES = (POSITIONING_MODE_DIRECT, POSITIONING_MODE_MIRROR)
+
+ELEVATION_FACTOR = 1
 
 
 class TargetGrid(object):
@@ -68,7 +70,7 @@ class Searchlight(object):
   def __init__(
       self, motor_controller, osc_receiver, name, positioning_mode,
       position=None, zero_position=None, target_grid=None, draw_grid=None,
-      azimuth_angle_bound=None, elevation_angle_bound=None):
+      direct_positioning=None, mirror_positioning=None):
     """Initializes a Searchlight.
 
     Args:
@@ -89,20 +91,12 @@ class Searchlight(object):
     # Add standard OSC callbacks.
     self.add_osc_callback('raw_elevation', self.osc_raw_elevation)
     self.add_osc_callback('raw_azimuth', self.osc_raw_azimuth)
-    # These seem to be invoked when the user stops dragging on a slider. Ignore them.
-    self.add_osc_callback('raw_elevation/z', self.osc_ignore)
-    self.add_osc_callback('raw_azimuth/z', self.osc_ignore)
-    # TouchOSC sends /accxyz commands hundreds of times per second with the current phone
-    # accelerometer readings. This is interesting, but currently causes a LOT of logspam, so
-    # blackhole them. We also don't care about pings.
-    self.osc_receiver.addCallback('/accxyz', self.osc_ignore)
-    self.osc_receiver.addCallback('/ping', self.osc_ignore)
+    self.osc_receiver.setFallback(self.osc_ignore)
 
     assert positioning_mode in SUPPORTED_POSITIONING_MODES, 'Invalid mode %s' % positioning_mode
     self.positioning_mode = positioning_mode
-
-    self.azimuth_degrees_min, self.azimuth_degrees_max = azimuth_angle_bound
-    self.elevation_degrees_min, self.elevation_degrees_max = elevation_angle_bound
+    self.direct_positioning = direct_positioning
+    self.mirror_positioning = mirror_positioning
 
     # The rest of the configuration parameters are optional.
     # position and zero_psition are needed if you want to target a specific location.
@@ -126,6 +120,8 @@ class Searchlight(object):
     if draw_grid:
       self.draw_grid = draw_grid
       self.add_osc_callback('draw_grid', self.osc_draw_grid)
+      # TouchOSC is a bit weird in that its grid control sends (y, x) instead of (x, y).
+      self.add_osc_callback('draw_grid_yx', self.osc_draw_grid_yx)
 
   def target_position(self, latitude, longitude, altitude):
     """Aims the searchlight to target given position, specified by coordinates and altitude."""
@@ -150,14 +146,32 @@ class Searchlight(object):
     elevation_degrees = elevation * RADIANS_TO_DEGREES
     logging.debug('target_angle: azimuth %s elevation %s', azimuth_degrees, elevation_degrees)
     if self.positioning_mode == POSITIONING_MODE_DIRECT:
+      azimuth_degrees_min, azimuth_degrees_max = self.direct_positioning['azimuth_angle_bound']
+      elevation_degrees_min, elevation_degrees_max = self.direct_positioning['elevation_angle_bound']      
+      # TODO(robgaunt): Azimuth motor position is inverted because the controllers aren't set up right.
       azimuth_motor_position = clamp_and_scale(
-          azimuth_degrees, self.azimuth_degrees_min, self.azimuth_degrees_max, -1, 1)
+          azimuth_degrees, azimuth_degrees_min, azimuth_degrees_max, 1, -1)
       self.motor_controller.go(AZIMUTH_CHANNEL, azimuth_motor_position)
       elevation_motor_position = clamp_and_scale(
-          elevation_degrees, self.elevation_degrees_min, self.elevation_degrees_max, -1, 1)
+          elevation_degrees, elevation_degrees_min, elevation_degrees_max, -1, 1)
+      self.motor_controller.go(ELEVATION_CHANNEL, elevation_motor_position)
+    elif self.positioning_mode == POSITIONING_MODE_MIRROR:
+      azimuth_degrees_min, azimuth_degrees_max = self.mirror_positioning['azimuth_angle_bound']
+      elevation_degrees_min, elevation_degrees_max = self.mirror_positioning['elevation_angle_bound']      
+      degrees_at_zero = self.mirror_positioning['degrees_at_zero_position']
+      actual_azimuth_degrees = degrees_at_zero + azimuth_degrees
+      # Divide by zero because each change of 1 degree in rotation angle causes a 2 degree change
+      # in beam position because it changes the plane of reflection and the angle of incidence.
+      azimuth_motor_position = clamp_and_scale(
+          actual_azimuth_degrees / 2.0, azimuth_degrees_min, azimuth_degrees_max, 1, -1)
+      # TODO(robgaunt): Azimuth motor position is inverted because the controllers aren't set up right.
+      self.motor_controller.go(AZIMUTH_CHANNEL, azimuth_motor_position)
+      # TODO(robgaunt): This is wrong - we need to know the height that the searchlight sits above
+      # the mirror in order to actually calculate this. But good enough for now.
+      elevation_motor_position = clamp_and_scale(
+          elevation_degrees, elevation_degrees_min, elevation_degrees_max, -1, 1)
       self.motor_controller.go(ELEVATION_CHANNEL, elevation_motor_position)
     else:
-      # TODO(robgaunt): Implement mirror positioning.
       raise AssertionError('Invalid positioning mode.')
 
   def add_osc_callback(self, callback_name, callback):
@@ -182,7 +196,7 @@ class Searchlight(object):
     self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
 
   @unwrap_osc
-  def osc_grid(self, x, y):
+  def osc_grid(self, y, x):
     assert 0 <= x and x <= 1, 'Invalid osc_grid x: %s' % x
     assert 0 <= y and y <= 1, 'Invalid osc_grid y: %s' % y
     self.last_target_lat, self.last_target_lon = self.target_grid.transform(x, y)
@@ -194,11 +208,19 @@ class Searchlight(object):
     self.last_elevation = elevation * MAX_ELEVATION
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
 
+  def _osc_draw_grid(self, x, y):
+    x -= 0.5
+    azimuth_angle = math.atan(x / y)
+    elevation_angle = math.atan(ELEVATION_FACTOR / math.sqrt(x * x + y * y))
+    self.target_angle(azimuth_angle, elevation_angle)
+
   @unwrap_osc
-  def osc_draw_grid(self, azimuth, elevation):
-    azimuth_angle = self.clamp_and_scale(azimuth, 0, 1, *self.draw_grid['azimuth_angle_bound'])
-    elevation_angle = self.clamp_and_scale(elevation, 0, 1, *self.draw_grid['elevation_angle_bound'])
-    self.target_angle(azimuth_angle * DEGREES_TO_RADIANS, elevation_angle * DEGREES_TO_RADIANS)
+  def osc_draw_grid(self, x, y):
+    self._osc_draw_grid(x, y)
+
+  @unwrap_osc
+  def osc_draw_grid_yx(self, y, x):
+    self._osc_draw_grid(x, y)
 
   def osc_ignore(self, message, address):
     pass
