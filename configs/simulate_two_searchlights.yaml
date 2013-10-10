@@ -2,13 +2,17 @@ osc_server:
   address: 224.0.0.1
   port: 8888
 
+configuration_database: "/home/flashlight/flashlight/database/config_db/config.db"
+
 searchlights:
   - name: "1"
+    positioning_mode: direct
     motor_controller:
       num_channels: 2
       serial_port: ""
 
   - name: "2"
+    positioning_mode: direct
     motor_controller:
       num_channels: 2
       serial_port: ""

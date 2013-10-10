@@ -6,7 +6,7 @@ Example usage:
   ./searchlight_main.py --config_file ../configs/simple.yaml
 """
 
-__author__ = 'Rob Gaunt (robgaunt@gmail.com)'
+__author__ = 'robgaunt@gmail.com (Rob Gaunt)'
 
 import argparse
 import logging
@@ -19,6 +19,7 @@ import yaml
 import logging_common
 import motor_controller
 import searchlight
+import searchlight_config
 
 
 def main():
@@ -34,6 +35,11 @@ def main():
   config = yaml.load(args.config_file)
   logging.info('Got config file: %s', pprint.pformat(config))
 
+  if not config.get('configuration_database'):
+    logging.error('Config file does not specify a searchlight configuration database.')
+  config_store = searchlight_config.SearchlightConfigStore.create_with_sqlite_database(
+      config.get('configuration_database'))
+
   osc_receiver = dispatch.Receiver()
   reactor.listenMulticast(
       config['osc_server']['port'],
@@ -45,10 +51,10 @@ def main():
     return
 
   searchlights = []
-  for searchlight_config in config.get('searchlights'):
-    controller_config = searchlight_config.pop('motor_controller')
+  for config_values in config.get('searchlights'):
+    controller_config = config_values.pop('motor_controller')
     controller = motor_controller.MotorController(reactor, **controller_config)
-    searchlights.append(searchlight.Searchlight(controller,  osc_receiver, **searchlight_config))
+    searchlights.append(searchlight.Searchlight(controller,  osc_receiver, config_store, **config_values))
 
   reactor.run()
 

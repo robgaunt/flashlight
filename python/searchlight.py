@@ -68,7 +68,7 @@ class Searchlight(object):
   """
 
   def __init__(
-      self, motor_controller, osc_receiver, name, positioning_mode,
+      self, motor_controller, osc_receiver, config_store, name, positioning_mode,
       position=None, zero_position=None, target_grid=None, draw_grid=None,
       direct_positioning=None, mirror_positioning=None):
     """Initializes a Searchlight.
@@ -76,6 +76,7 @@ class Searchlight(object):
     Args:
       motor_controller: An instance of motor_controller.MotorController.
       osc_receiver: An instance of txosc.dispatch.Receiver.
+      config_store: An instance of searchlight_config.SearchlightConfigStore.
       name: The name of this searchlight. Used to identify which OSC endpoints it responds to.
       position: A latitude, longitude pair (in floating-point degrees) representing the position
         of the searchlight.
@@ -87,6 +88,9 @@ class Searchlight(object):
     self.name = name
     self.motor_controller = motor_controller
     self.osc_receiver = osc_receiver
+
+    self.config_store = config_store
+    self.config = self.config_store.get_or_create_config_by_name(self.name)
 
     # Add standard OSC callbacks.
     self.add_osc_callback('raw_elevation', self.osc_raw_elevation)
@@ -188,11 +192,15 @@ class Searchlight(object):
   @unwrap_osc
   def osc_raw_elevation(self, value):
     assert 0 <= value and value <= 1, 'Invalid osc_raw_elevation value: %s' % value
+    value = clamp_and_scale(
+        value, 0, 1, self.config.elevation_lower_bound, self.config.elevation_upper_bound)
     self.motor_controller.go(ELEVATION_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
 
   @unwrap_osc
   def osc_raw_azimuth(self, value):
     assert 0 <= value and value <= 1, 'Invalid osc_raw_azimuth value: %s' % value
+    value = clamp_and_scale(
+        value, 0, 1, self.config.azimuth_lower_bound, self.config.azimuth_upper_bound)
     self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
 
   @unwrap_osc
@@ -208,7 +216,32 @@ class Searchlight(object):
     self.last_elevation = elevation * MAX_ELEVATION
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
 
+  @unwrap_osc
+  def osc_set_azimuth_lower_bound(self, value):
+    self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
+    self.config.azimuth_lower_bound = value
+    self.config_store.commit()
+
+  @unwrap_osc
+  def osc_set_azimuth_upper_bound(self, value):
+    self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
+    self.config.azimuth_upper_bound = value
+    self.config_store.commit()
+
+  @unwrap_osc
+  def osc_set_elevation_lower_bound(self, value):
+    self.motor_controller.go(ELEVATION_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
+    self.config.elevation_lower_bound = value
+    self.config_store.commit()
+
+  @unwrap_osc
+  def osc_set_elevation_upper_bound(self, value):
+    self.motor_controller.go(ELEVATION_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
+    self.config.elevation_upper_bound = value
+    self.config_store.commit()
+
   def _osc_draw_grid(self, x, y):
+    # TODO(robgaunt): This be some magic.
     x -= 0.5
     azimuth_angle = math.atan(x / y)
     elevation_angle = math.atan(ELEVATION_FACTOR / math.sqrt(x * x + y * y))
