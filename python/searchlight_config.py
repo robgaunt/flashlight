@@ -7,7 +7,7 @@ import storm.locals
 _TABLE_NAME = 'searchlight_config'
 
 
-class SearchlightConfigStore(storm.locals.store):
+class SearchlightConfigStore(storm.locals.Store):
   DROP_TABLE_SQL = 'DROP TABLE IF EXISTS %s' % _TABLE_NAME
   CREATE_TABLE_SQL = """
     CREATE TABLE %s (
@@ -24,10 +24,11 @@ class SearchlightConfigStore(storm.locals.store):
     self.execute(self.CREATE_TABLE_SQL)
 
   def get_config_by_name(self, name):
-    return None
+    return self.find(SearchlightConfig, SearchlightConfig.name == name).one()
 
   def get_or_create_config_by_name(self, name):
     """Fetches config by name, or creates default config if none exists."""
+    name = unicode(name)
     config = self.get_config_by_name(name)
     if not config:
       config = SearchlightConfig()

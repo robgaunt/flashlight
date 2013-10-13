@@ -32,6 +32,14 @@ def main():
   config.elevation_upper_bound = 1
   store.add(config)
 
+  config = searchlight_config.SearchlightConfig()
+  config.name = u'2'
+  config.azimuth_lower_bound = 0
+  config.azimuth_upper_bound = 1
+  config.elevation_lower_bound = 0
+  config.elevation_upper_bound = 1
+  store.add(config)
+
   store.commit()
 
 if __name__ == '__main__':

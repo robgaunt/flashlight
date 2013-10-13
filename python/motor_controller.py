@@ -6,11 +6,8 @@ from twisted.internet import serialport
 from twisted.protocols import basic
 
 SIMULATION_DELAY_SECONDS = 0.1
+COMMAND_EXPIRY_SECONDS = 0.15
 
-
-# Improvement to robustness:
-# Wait up until 0.15 seconds for controller to ack command
-# Otherwise pop queue, send next command, invoke failure handler
 
 class MotorController(basic.LineOnlyReceiver):
   """Communicates with the Roboteq motor controller using a line-based protocol.
@@ -42,6 +39,7 @@ class MotorController(basic.LineOnlyReceiver):
     # The last line seen was the head of the command queue. The next line we see should be the
     # response to that command.
     self.pending_response = False
+    self.delayed_expiry_call = None
     if not self.simulate:
       serialport.SerialPort(self, serial_port, reactor, baudrate='115200')
 
@@ -58,18 +56,25 @@ class MotorController(basic.LineOnlyReceiver):
     else:
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, command)
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+')
+    self.delayed_expiry_call = self.reactor.callLater(COMMAND_EXPIRY_SECONDS, self.onExpiry)
 
-  def commandComplete(self):
-    self.command_queue.popleft()
+  def onExpiry(self):
+    # TODO DRY
+    logging.debug('onexpiry')
+    self.pending_response = False
+    self.delayed_expiry_call = None
+    command, callback = self.command_queue.popleft()
+    logging.debug('Controller %s Command %s EXPIRED', self.serial_port, command)
     if self.command_queue:
-      self.sendNextCommand();
+      self.sendNextCommand()
 
   def lineReceived(self, line):
-    logging.debug('Controller %s read line: %s', self.serial_port, line)
     if not line:
       return
     if self.pending_response:
       self.pending_response = False
+      self.delayed_expiry_call.cancel()
+      self.delayed_expiry_call = None
       command, callback = self.command_queue.popleft()
       logging.debug('Controller %s Command %s Response %s', self.serial_port, command, line)
       if callback:

@@ -194,14 +194,14 @@ class Searchlight(object):
     assert 0 <= value and value <= 1, 'Invalid osc_raw_elevation value: %s' % value
     value = clamp_and_scale(
         value, 0, 1, self.config.elevation_lower_bound, self.config.elevation_upper_bound)
-    self.motor_controller.go(ELEVATION_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
+    self.motor_controller.go(ELEVATION_CHANNEL, value)
 
   @unwrap_osc
   def osc_raw_azimuth(self, value):
     assert 0 <= value and value <= 1, 'Invalid osc_raw_azimuth value: %s' % value
     value = clamp_and_scale(
         value, 0, 1, self.config.azimuth_lower_bound, self.config.azimuth_upper_bound)
-    self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
+    self.motor_controller.go(AZIMUTH_CHANNEL, value)
 
   @unwrap_osc
   def osc_target_grid(self, y, x):
@@ -215,30 +215,6 @@ class Searchlight(object):
     assert 0 <= elevation and elevation <= 1, 'Invalid osc_target_grid_elevation: %s' % elevation
     self.last_elevation = elevation * MAX_ELEVATION
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
-
-  @unwrap_osc
-  def osc_set_azimuth_lower_bound(self, value):
-    self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
-    self.config.azimuth_lower_bound = value
-    self.config_store.commit()
-
-  @unwrap_osc
-  def osc_set_azimuth_upper_bound(self, value):
-    self.motor_controller.go(AZIMUTH_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
-    self.config.azimuth_upper_bound = value
-    self.config_store.commit()
-
-  @unwrap_osc
-  def osc_set_elevation_lower_bound(self, value):
-    self.motor_controller.go(ELEVATION_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
-    self.config.elevation_lower_bound = value
-    self.config_store.commit()
-
-  @unwrap_osc
-  def osc_set_elevation_upper_bound(self, value):
-    self.motor_controller.go(ELEVATION_CHANNEL, clamp_and_scale(value, 0, 1, -1, 1))
-    self.config.elevation_upper_bound = value
-    self.config_store.commit()
 
   def _osc_draw_grid(self, x, y):
     # TODO(robgaunt): This be some magic.

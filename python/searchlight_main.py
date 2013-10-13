@@ -14,8 +14,11 @@ import pprint
 from txosc import async
 from txosc import dispatch
 from twisted.internet import reactor
+from twisted.web import resource
+from twisted.web import server
 import yaml
 
+from admin import admin_server
 import logging_common
 import motor_controller
 import searchlight
@@ -37,6 +40,7 @@ def main():
 
   if not config.get('configuration_database'):
     logging.error('Config file does not specify a searchlight configuration database.')
+    return
   config_store = searchlight_config.SearchlightConfigStore.create_with_sqlite_database(
       config.get('configuration_database'))
 
@@ -55,6 +59,13 @@ def main():
     controller_config = config_values.pop('motor_controller')
     controller = motor_controller.MotorController(reactor, **controller_config)
     searchlights.append(searchlight.Searchlight(controller,  osc_receiver, config_store, **config_values))
+
+  if not config.get('admin_server_port'):
+    logging.error('Config file does not specify administration server port.')
+    return
+  reactor.listenTCP(
+      config.get('admin_server_port'),
+      admin_server.AdminServer(searchlights))
 
   reactor.run()
 

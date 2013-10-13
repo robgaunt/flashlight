@@ -2,7 +2,9 @@ osc_server:
   address: 224.0.0.1
   port: 8888
 
-configuration_database: "/home/flashlight/flashlight/database/config_db/config.db"
+admin_server_port: 8000
+
+configuration_database: "../database/config.db"
 
 searchlights:
   - name: "1"
