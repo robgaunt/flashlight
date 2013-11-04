@@ -6,6 +6,8 @@ from twisted.internet import serialport
 from twisted.protocols import basic
 
 SIMULATION_DELAY_SECONDS = 0.1
+# If we do not receive a response within this many seconds after sending a command, sends the next
+# command anyway.
 COMMAND_EXPIRY_SECONDS = 0.15
 
 
@@ -43,11 +45,6 @@ class MotorController(basic.LineOnlyReceiver):
     if not self.simulate:
       serialport.SerialPort(self, serial_port, reactor, baudrate='115200')
 
-  def sendCommand(self, command, callback=None):
-    self.command_queue.append((command, callback))
-    if len(self.command_queue) == 1:
-      self.sendNextCommand()
-
   def sendNextCommand(self):
     command = self.command_queue[0][0]
     if not self.simulate:
@@ -65,6 +62,8 @@ class MotorController(basic.LineOnlyReceiver):
     self.delayed_expiry_call = None
     command, callback = self.command_queue.popleft()
     logging.debug('Controller %s Command %s EXPIRED', self.serial_port, command)
+    if callback:
+      callback('EXPIRED')  # TODO better way to handle this
     if self.command_queue:
       self.sendNextCommand()
 
@@ -96,6 +95,11 @@ class MotorController(basic.LineOnlyReceiver):
     logging.info('Controller %s: connection made', self.serial_port)
 
   # Public API
+  def sendCommand(self, command, callback=None):
+    self.command_queue.append((command, callback))
+    if len(self.command_queue) == 1:
+      self.sendNextCommand()
+
   def go(self, channel, value):
     """Sends a 'G' (Go To Speed) command to motor.
 
