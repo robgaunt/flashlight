@@ -33,9 +33,9 @@ class SearchlightConfigStore(storm.locals.Store):
     if not config:
       config = SearchlightConfig()
       config.name = name
-      config.azimuth_lower_bound = 0
+      config.azimuth_lower_bound = -1
       config.azimuth_upper_bound = 1
-      config.elevation_lower_bound = 0
+      config.elevation_lower_bound = -1
       config.elevation_upper_bound = 1
       self.add(config)
       self.commit()

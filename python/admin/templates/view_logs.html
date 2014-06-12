@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block subtitle %} - View Logs{% endblock %}
+
+{% block content %}
+  <form method="post">
+    {{ form.as_p }}
+    <input type="submit" value="Submit">
+  </form>
+  {% if log_contents %}
+    <h2>Log Contents</h2>
+    <pre>{{ log_contents }}</pre>
+  {% endif %}
+{% endblock %}

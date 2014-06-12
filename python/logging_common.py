@@ -7,7 +7,7 @@ from twisted.python import log
 
 
 def configure_logging(logfile):
-  logging.basicConfig(level=logging.DEBUG,
+  logging.basicConfig(level=logging.INFO,
                       format='%(asctime)s %(levelname)-8s %(message)s',
                       filename=logfile,
                       filemode='w')

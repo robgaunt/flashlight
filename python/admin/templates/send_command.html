@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block subtitle %} - Send Command {% endblock %}
+
+{% block content %}
+  {% if command_response %}
+    <h4>Response</h4>
+    <textarea>
+      {{ command_response }}
+    </textarea>
+  {% endif %}
+  <form method="post">
+    {{ form.as_p }}
+    <input type="submit" value="Submit">
+  </form>
+{% endblock %}
