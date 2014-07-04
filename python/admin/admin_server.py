@@ -99,7 +99,7 @@ class SendCommandResource(_BaseResource):
       commands = form.cleaned_data['commands'].split('\n')
       for command in commands:
         # TODO callback
-        searchlight.motor_controller.sendCommand(str(command))
+        searchlight.motor_controller.send_command(str(command))
     return self.render_to_string(form=form)
     
   render_POST = render_GET
@@ -131,6 +131,7 @@ class AdminServer(server.Site):
     root.putChild('config', ConfigurationResource(searchlights))
     root.putChild('send_command', SendCommandResource(searchlights))
     root.putChild('view_logs', ViewLogsResource())
+    root.putChild('', ViewLogsResource())
     root.putChild('static', static.File(STATIC_DIR))
     server.Site.__init__(self, root)
   

@@ -45,7 +45,7 @@ class MotorController(basic.LineOnlyReceiver):
     if not self.simulate:
       serialport.SerialPort(self, serial_port, reactor, baudrate='115200')
 
-  def sendNextCommand(self):
+  def send_next_command_(self):
     command = self.command_queue[0][0]
     if not self.simulate:
       logging.debug('Controller %s sending: %s', self.serial_port, command)
@@ -53,9 +53,9 @@ class MotorController(basic.LineOnlyReceiver):
     else:
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, command)
       self.reactor.callLater(SIMULATION_DELAY_SECONDS, self.lineReceived, '+')
-    self.delayed_expiry_call = self.reactor.callLater(COMMAND_EXPIRY_SECONDS, self.onExpiry)
+    self.delayed_expiry_call = self.reactor.callLater(COMMAND_EXPIRY_SECONDS, self.on_expiry_)
 
-  def onExpiry(self):
+  def on_expiry_(self):
     # TODO DRY
     logging.debug('onexpiry')
     self.pending_response = False
@@ -65,9 +65,10 @@ class MotorController(basic.LineOnlyReceiver):
     if callback:
       callback('EXPIRED')  # TODO better way to handle this
     if self.command_queue:
-      self.sendNextCommand()
+      self.send_next_command_()
 
   def lineReceived(self, line):
+    """Called whenever a line is received. Overrides basic.LineOnlyReceiver.lineReceived."""
     if not line:
       return
     if self.pending_response:
@@ -79,7 +80,7 @@ class MotorController(basic.LineOnlyReceiver):
       if callback:
         callback(line)
       if self.command_queue:
-        self.sendNextCommand()
+        self.send_next_command_()
     elif self.command_queue and line == self.command_queue[0][0]:
       logging.debug('Controller %s awaiting response for %s',
                     self.serial_port, self.command_queue[0][0])
@@ -95,10 +96,10 @@ class MotorController(basic.LineOnlyReceiver):
     logging.info('Controller %s: connection made', self.serial_port)
 
   # Public API
-  def sendCommand(self, command, callback=None):
+  def send_command(self, command, callback=None):
     self.command_queue.append((command, callback))
     if len(self.command_queue) == 1:
-      self.sendNextCommand()
+      self.send_next_command_()
 
   def go(self, channel, value):
     """Sends a 'G' (Go To Speed) command to motor.
@@ -123,16 +124,16 @@ class MotorController(basic.LineOnlyReceiver):
         return
 
     # Didn't find an existing !G command to replace, so send a new one.
-    self.sendCommand(command)
+    self.send_command(command)
 
   def write_variable(self, variable, value, callback=None):
     """Writes a variable to user flash. This variable will be persisted across restarts."""
-    self.sendCommand('^EE %d %d' % (variable, value), callback=callback)
-    self.sendCommand('%eesav', callback=callback)
+    self.send_command('^EE %d %d' % (variable, value), callback=callback)
+    self.send_command('%eesav', callback=callback)
 
   def read_variable(self, variable, callback):
     """Reads a variable from user flash. Callback will be invoked with the integer value."""
-    self.sendCommand('~ee %d' % variable, callback=lambda line: callback(int(line.split('=')[-1])))
+    self.send_command('~ee %d' % variable, callback=lambda line: callback(int(line.split('=')[-1])))
 
   def _validate_value(self, value):
     assert value <= 1.0 and value >= -1.0, 'Invalid value: %d' % value

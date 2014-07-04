@@ -4,17 +4,33 @@ osc_server:
 
 admin_server_port: 8000
 
-configuration_database: "../database/config.db"
+configuration_database: "/home/flashlight/config.db"
 
 searchlights:
   - name: "1"
     positioning_mode: direct
+    draw_grid:
+      azimuth_angle_bound: [-45, 45]
+      elevation_angle_bound: [35, 80]
+    direct_positioning:
+      azimuth_angle_bound: [-90, 90]
+      elevation_angle_bound: [0, 90]
     motor_controller:
       num_channels: 2
       serial_port: ""
 
   - name: "2"
     positioning_mode: direct
+    draw_grid:
+      azimuth_angle_bound: [-45, 45]
+      elevation_angle_bound: [35, 80]
+    direct_positioning:
+      azimuth_angle_bound: [-90, 90]
+      elevation_angle_bound: [0, 90]
     motor_controller:
       num_channels: 2
       serial_port: ""
+
+psmove_controllers:
+  - searchlight_names: ["1"]
+  - searchlight_names: ["2"]

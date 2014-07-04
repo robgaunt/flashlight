@@ -14,15 +14,14 @@ import pprint
 from txosc import async
 from txosc import dispatch
 from twisted.internet import reactor
-from twisted.web import resource
-from twisted.web import server
 import yaml
 
 from admin import admin_server
+from motor_controller import MotorController
+from psmove_connection_manager import PSMoveConnectionManager
+from searchlight import Searchlight
+from searchlight_config import SearchlightConfigStore
 import logging_common
-import motor_controller
-import searchlight
-import searchlight_config
 
 
 def main():
@@ -41,31 +40,38 @@ def main():
   if not config.get('configuration_database'):
     logging.error('Config file does not specify a searchlight configuration database.')
     return
-  config_store = searchlight_config.SearchlightConfigStore.create_with_sqlite_database(
+  config_store = SearchlightConfigStore.create_with_sqlite_database(
       config.get('configuration_database'))
 
   osc_receiver = dispatch.Receiver()
   reactor.listenMulticast(
       config['osc_server']['port'],
-      async.MulticastDatagramServerProtocol(osc_receiver, config['osc_server']['address']),
+      async.MulticastDatagramServerProtocol(
+          osc_receiver, config['osc_server']['address']),
       listenMultiple=True)
 
   if not config.get('searchlights'):
     logging.error('Config file specifies no searchlights.')
     return
 
-  searchlights = []
+  name_to_searchlight = {}
   for config_values in config.get('searchlights'):
-    controller_config = config_values.pop('motor_controller')
-    controller = motor_controller.MotorController(reactor, **controller_config)
-    searchlights.append(searchlight.Searchlight(controller,  osc_receiver, config_store, **config_values))
+    motor_controller = MotorController(reactor, **config_values.pop('motor_controller'))
+    searchlight = Searchlight(motor_controller, osc_receiver, config_store, **config_values)
+    name_to_searchlight[searchlight.name] = searchlight
+
+  psmove_connection_manager = None
+  psmove_controller_configs = config.get('psmove_controllers', [])
+  if psmove_controller_configs:
+    psmove_connection_manager = PSMoveConnectionManager(
+        reactor, psmove_controller_configs, name_to_searchlight)
 
   if not config.get('admin_server_port'):
     logging.error('Config file does not specify administration server port.')
     return
   reactor.listenTCP(
       config.get('admin_server_port'),
-      admin_server.AdminServer(searchlights))
+      admin_server.AdminServer(name_to_searchlight.values()))
 
   reactor.run()
 
