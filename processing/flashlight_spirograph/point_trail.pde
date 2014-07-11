@@ -16,14 +16,12 @@ class PointTrail {
   public void draw() {
     while (points.size() > maxPoints) {
       Point2D point = points.removeFirst();
-      stroke(0);
-      point(point.x, point.y);
     }
     int position = 0;
     for (Point2D point : points) {
       position++;
       stroke(255.0 * (float)position / points.size());
-      point(point.x, point.y); 
+      ellipse(point.x, point.y, 5, 5); 
     }
   }
 }
