@@ -1,5 +1,7 @@
-import psmove
 import logging
+import psmove
+
+from twisted.internet import task
 
 import psmove_controller
 
@@ -23,11 +25,10 @@ class PSMoveConnectionManager(object):
     # Set of serials for which we already attempted USB pairing. This is kept so that we don't
     # attempt to pair any controller more than once.
     self.paired_usb_serials_ = set()
-    self.reactor.callLater(0, self.connect_moves_)
+    self.task_ = task.LoopingCall(self.connect_loop_)
+    self.task_.start(PSMOVE_CONNECT_INTERVAL)
 
-  def connect_moves_(self):
-    self.reactor.callLater(PSMOVE_CONNECT_INTERVAL, self.connect_moves_)
-
+  def connect_loop_(self):
     connection_count = psmove.count_connected()
     connected_serials = set()
     logging.debug('Connected Moves: %d', connection_count)

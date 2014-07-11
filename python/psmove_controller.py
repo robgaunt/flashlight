@@ -93,5 +93,7 @@ class PSMoveController(object):
       elevation = math.atan2(2 * qx * qw - 2 * qy * qz ,
                              1 - 2 * qx * qx - 2 * qz * qz)
     for searchlight in self.searchlights:
+      # print 'az %.2f el %.2f roll %.2f' % (
+      #     azimuth * 57.2957795, elevation * 57.2957795, roll * 57.2957795)
       searchlight.target_angle(azimuth, elevation)
 
