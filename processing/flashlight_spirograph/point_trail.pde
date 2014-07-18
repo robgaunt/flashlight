@@ -24,5 +24,9 @@ class PointTrail {
       ellipse(point.x, point.y, 5, 5); 
     }
   }
+  
+  public void clear() {
+    points.clear();
+  }
 }
 

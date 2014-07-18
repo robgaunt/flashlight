@@ -1,9 +1,9 @@
-// general tweak parameter which adjusts the various inputs automatically over time
+  // general tweak parameter which adjusts the various inputs automatically over time
 
 import java.util.Vector;
 import controlP5.*;
 
-//AndroidSetup androidSetup;
+AndroidSetup androidSetup;
 final int NUM_SEARCHLIGHTS = 4;
 final SpirographPointProvider[] pointProviders = new SpirographPointProvider[NUM_SEARCHLIGHTS];
 final SearchlightDirector[] searchlightDirectors = new SearchlightDirector[NUM_SEARCHLIGHTS];
@@ -44,10 +44,7 @@ boolean chaseDistanceChanged = true;
 ControlP5 cp5;
 
 void setup() {
-//  size(800, 1280);
-  // For running on a Macbook with Retina display:
-  size(800, 1280, "processing.core.PGraphicsRetina2D");
-  hint(ENABLE_RETINA_PIXELS);
+  size(800, 1280);
 
   background(0);
   smooth();
@@ -55,10 +52,17 @@ void setup() {
   centerPoint = new Point2D(width / 2.0, width / 2.0);
   SLIDER_WIDTH = width - 2 * SLIDER_MARGIN;
 
-//  androidSetup = new AndroidSetup();
-//  androidSetup.acquireLocks();
+  androidSetup = new AndroidSetup();
+  androidSetup.acquireLocks();
 
   cp5 = new ControlP5(this);
+  for (int i = 0; i < NUM_SEARCHLIGHTS; i++) {
+    cp5.addToggle("SL_" + i)
+        .setLabel("Beam " + (i + 1))
+        .setPosition(SLIDER_MARGIN + 2 * i * SLIDER_HEIGHT, SLIDER_HEIGHT)
+        .setSize(SLIDER_HEIGHT, SLIDER_HEIGHT)
+        .setValue(true);
+  }
   cp5.addSlider("radiusOne")
       .setPosition(SLIDER_MARGIN, width)
       .setSize(SLIDER_WIDTH, SLIDER_HEIGHT)
@@ -84,7 +88,7 @@ void setup() {
       .setSize(SLIDER_WIDTH, SLIDER_HEIGHT)
       .setRange(CHASE_DISTANCE_MIN, CHASE_DISTANCE_MAX)
       .setValue(CHASE_DISTANCE_INITIAL);
-
+  
   for (int i = 0; i < NUM_SEARCHLIGHTS; ++i) {
     SpirographPointProvider pointProvider = new SpirographPointProvider(width, width);
     pointProvider.setRads(i * PI / NUM_SEARCHLIGHTS);
@@ -130,5 +134,11 @@ void controlEvent(ControlEvent event) {
       || event.isFrom("pointDistance");
   velocityChanged = velocityChanged || event.isFrom("velocity");
   chaseDistanceChanged = chaseDistanceChanged || event.isFrom("chaseDistance");
+  if (event.getName().startsWith("SL_")) {
+    int searchlightNumber = Integer.parseInt(event.getName().replace("SL_", ""));
+    if (searchlightNumber >= 0 && searchlightNumber < NUM_SEARCHLIGHTS) {
+      searchlightDirectors[searchlightNumber].setEnabled(event.getValue() != 0);
+    }
+  }
 }
 

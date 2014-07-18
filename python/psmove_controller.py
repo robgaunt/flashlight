@@ -5,7 +5,7 @@ import time
 
 from twisted.internet import task
 
-PSMOVE_CONTROL_LOOP_INTERVAL = 0.2
+PSMOVE_CONTROL_LOOP_INTERVAL = 0
 
 
 class PSMoveController(object):
