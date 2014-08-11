@@ -11,7 +11,6 @@ __author__ = 'robgaunt@gmail.com (Rob Gaunt)'
 import argparse
 import logging
 import pprint
-from txosc import async
 from txosc import dispatch
 from twisted.internet import reactor
 import yaml
@@ -22,6 +21,7 @@ from psmove_connection_manager import PSMoveConnectionManager
 from searchlight import Searchlight
 from searchlight_config import SearchlightConfigStore
 import logging_common
+import osc_server
 
 
 def main():
@@ -46,7 +46,7 @@ def main():
   osc_receiver = dispatch.Receiver()
   reactor.listenMulticast(
       config['osc_server']['port'],
-      async.MulticastDatagramServerProtocol(
+      osc_server.MulticastDatagramServerProtocol(
           osc_receiver, config['osc_server']['address']),
       listenMultiple=True)
 

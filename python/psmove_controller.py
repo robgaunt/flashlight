@@ -2,6 +2,7 @@ import logging
 import math
 import psmove
 import time
+import threading
 
 from twisted.internet import task
 
@@ -25,13 +26,19 @@ class PSMoveController(object):
     self.searchlights = searchlights
     self.set_orientation_enabled_(False)
     self.reactor.addSystemEventTrigger('before', 'shutdown', self.before_shutdown_)
-    self.task_ = task.LoopingCall(self.control_loop_)
-    self.task_.start(PSMOVE_CONTROL_LOOP_INTERVAL)
+    self.running = True
+    self.thread = threading.Thread(target=self.control_loop_thread_)
+    self.thread.start()
 
   def disconnect(self):
-    self.task_.stop()
+    self.running = False
+    self.thread.join()
     del self.move
     self.move = None
+
+  def control_loop_thread_(self):
+    while self.running:
+      self.control_loop_()
 
   def control_loop_(self):
     """Main control loop which gets orientation and sends commands."""
@@ -92,8 +99,11 @@ class PSMoveController(object):
                             1 - 2 * qy * qy - 2 * qz * qz)
       elevation = math.atan2(2 * qx * qw - 2 * qy * qz ,
                              1 - 2 * qx * qx - 2 * qz * qz)
+    # print 'az %.2f el %.2f roll %.2f' % (
+    #     azimuth * 57.2957795, elevation * 57.2957795, roll * 57.2957795)
+    self.reactor.callFromThread(self.target_angle, azimuth, elevation)
+
+  def target_angle(self, azimuth, elevation):
     for searchlight in self.searchlights:
-      # print 'az %.2f el %.2f roll %.2f' % (
-      #     azimuth * 57.2957795, elevation * 57.2957795, roll * 57.2957795)
       searchlight.target_angle(azimuth, elevation)
 
