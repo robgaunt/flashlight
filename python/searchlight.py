@@ -159,6 +159,8 @@ class Searchlight(object):
       self.motor_controller.go(AZIMUTH_CHANNEL, azimuth_motor_position)
       elevation_motor_position = clamp_and_scale(
           elevation_degrees, elevation_degrees_min, elevation_degrees_max, -1, 1)
+      if elevation_motor_position < self.config.elevation_lower_bound:
+          elevation_motor_position = self.config.elevation_lower_bound
       self.motor_controller.go(ELEVATION_CHANNEL, elevation_motor_position)
     elif self.positioning_mode == POSITIONING_MODE_MIRROR:
       azimuth_degrees_min, azimuth_degrees_max = self.mirror_positioning['azimuth_angle_bound']
