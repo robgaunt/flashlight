@@ -7,11 +7,13 @@ import threading
 from twisted.internet import task
 
 PSMOVE_CONTROL_LOOP_INTERVAL = 0
+RADIANS_TO_DEGREES = 57.2957795
+DEGREES_TO_RADIANS = 1 / RADIANS_TO_DEGREES
 
 
 class PSMoveController(object):
   """Acts as an interface between a PSMove controller and searchlights."""
-  def __init__(self, reactor, move, serial, searchlights):
+  def __init__(self, reactor, move, serial, searchlights, color_rgb):
     """Creates a PSMove controller.
 
     Args:
@@ -19,6 +21,7 @@ class PSMoveController(object):
       move: A PSMove instance.
       serial: The serial number of the move, as a string.
       searchlights: A list of searchlight.Searchlight instances that this controls.
+      color_rgb: A tuple (red, green, blue) of color values to use for the LEDs on this controller.
     """
     self.reactor = reactor
     self.move = move
@@ -101,9 +104,24 @@ class PSMoveController(object):
                              1 - 2 * qx * qx - 2 * qz * qz)
     # print 'az %.2f el %.2f roll %.2f' % (
     #     azimuth * 57.2957795, elevation * 57.2957795, roll * 57.2957795)
+    min_elevation = -1
+    for searchlight in self.searchlights:
+      min_elevation = max(min_elevation, searchlight.config.elevation_lower_bound)
+    min_elevation = clamp_and_scale(min_elevation, -1, 1, 0, 90 * DEGREES_TO_RADIANS)
+    if elevation < min_elevation:
+      elevation = min_elevation
     self.reactor.callFromThread(self.target_angle, azimuth, elevation)
 
   def target_angle(self, azimuth, elevation):
     for searchlight in self.searchlights:
       searchlight.target_angle(azimuth, elevation)
+
+
+def clamp_and_scale(value, min_value, max_value, scaled_min, scaled_max):
+  if value < min_value:
+    value = min_value
+  elif value > max_value:
+    value = max_value
+  return (
+      float(scaled_max - scaled_min) * (value - min_value) / (max_value - min_value) + scaled_min)
 

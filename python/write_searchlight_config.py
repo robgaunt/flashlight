@@ -26,17 +26,17 @@ def main():
   # TODO(robgaunt): Read config values from file.
   config = searchlight_config.SearchlightConfig()
   config.name = u'1'
-  config.azimuth_lower_bound = 0
+  config.azimuth_lower_bound = -1
   config.azimuth_upper_bound = 1
-  config.elevation_lower_bound = 0
+  config.elevation_lower_bound = -1
   config.elevation_upper_bound = 1
   store.add(config)
 
   config = searchlight_config.SearchlightConfig()
   config.name = u'2'
-  config.azimuth_lower_bound = 0
+  config.azimuth_lower_bound = -1
   config.azimuth_upper_bound = 1
-  config.elevation_lower_bound = 0
+  config.elevation_lower_bound = -1
   config.elevation_upper_bound = 1
   store.add(config)
 

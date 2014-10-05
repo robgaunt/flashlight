@@ -95,6 +95,7 @@ class Searchlight(object):
     # Add standard OSC callbacks.
     self.add_osc_callback('raw_elevation', self.osc_raw_elevation)
     self.add_osc_callback('raw_azimuth', self.osc_raw_azimuth)
+    self.add_osc_callback('elevation_limit', self.osc_elevation_limit)
     self.osc_receiver.setFallback(self.osc_ignore)
 
     assert positioning_mode in SUPPORTED_POSITIONING_MODES, 'Invalid mode %s' % positioning_mode
@@ -215,6 +216,14 @@ class Searchlight(object):
     assert 0 <= elevation and elevation <= 1, 'Invalid osc_target_grid_elevation: %s' % elevation
     self.last_elevation = elevation * MAX_ELEVATION
     self.target_position(self.last_target_lat, self.last_target_lon, self.last_elevation)
+
+  @unwrap_osc
+  def osc_elevation_limit(self, value):
+    assert 0 <= value and value <= 1, 'Invalid osc_elevation_limit value: %s' % value
+    value = clamp_and_scale(value, 0, 1, -1, 1)
+    self.motor_controller.go(ELEVATION_CHANNEL, value)
+    self.config.elevation_lower_bound = value
+    self.config_store.commit()
 
   def _osc_draw_grid(self, x, y):
     # TODO(robgaunt): This be some magic.

@@ -33,4 +33,7 @@ searchlights:
 
 psmove_controllers:
   - searchlight_names: ["1"]
+    color_rgb: [255, 243, 0]
+
   - searchlight_names: ["2"]
+    color_rgb: [114, 206, 1]

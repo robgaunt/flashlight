@@ -75,7 +75,7 @@ class PSMoveConnectionManager(object):
       searchlights = [self.name_to_searchlight_[s] for s in config['searchlight_names']]
       self.serial_to_config_[serial] = config
       self.serial_to_controller_[serial] = psmove_controller.PSMoveController(
-          self.reactor, move, serial, searchlights)
+          self.reactor, move, serial, searchlights, config['color_rgb'])
     else:
       logging.error('Unable to connect move: %s - missing calibration (%d) or orientation (%d)',
                     serial, has_calibration, has_orientation)

@@ -51,3 +51,10 @@ searchlights:
     motor_controller:
       num_channels: 2
       serial_port: "/dev/ttyUSB1"
+
+psmove_controllers:
+  - searchlight_names: ["3"]
+    color_rgb: [0, 197, 168]
+
+  - searchlight_names: ["4"]
+    color_rgb: [171, 126, 171]
