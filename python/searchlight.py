@@ -1,4 +1,5 @@
 __author__ = 'Rob Gaunt (robgaunt@gmail.com)'
+# updated by Neal 20260329 - add implemention of OSC messages azimuth_lower_limit,  azimuth_upper_limit, limit_reset
 
 import logging
 import math
@@ -96,6 +97,9 @@ class Searchlight(object):
     self.add_osc_callback('raw_elevation', self.osc_raw_elevation)
     self.add_osc_callback('raw_azimuth', self.osc_raw_azimuth)
     self.add_osc_callback('elevation_limit', self.osc_elevation_limit)
+    self.add_osc_callback('azimuth_lower_limit', self.osc_azimuth_lower_limit)
+    self.add_osc_callback('azimuth_upper_limit', self.osc_azimuth_upper_limit)
+    self.add_osc_callback('limit_reset', self.osc_limit_reset)
     self.osc_receiver.setFallback(self.osc_ignore)
 
     assert positioning_mode in SUPPORTED_POSITIONING_MODES, 'Invalid mode %s' % positioning_mode
@@ -156,11 +160,15 @@ class Searchlight(object):
       # TODO(robgaunt): Azimuth motor position is inverted because the controllers aren't set up right.
       azimuth_motor_position = clamp_and_scale(
           azimuth_degrees, azimuth_degrees_min, azimuth_degrees_max, 1, -1)
+      azimuth_motor_position = clamp_and_scale(
+          azimuth_motor_position, -1, 1,
+          self.config.azimuth_lower_bound, self.config.azimuth_upper_bound)
       self.motor_controller.go(AZIMUTH_CHANNEL, azimuth_motor_position)
       elevation_motor_position = clamp_and_scale(
           elevation_degrees, elevation_degrees_min, elevation_degrees_max, -1, 1)
-      if elevation_motor_position < self.config.elevation_lower_bound:
-          elevation_motor_position = self.config.elevation_lower_bound
+      elevation_motor_position = clamp_and_scale(
+          elevation_motor_position, -1, 1,
+          self.config.elevation_lower_bound, self.config.elevation_upper_bound)
       self.motor_controller.go(ELEVATION_CHANNEL, elevation_motor_position)
     elif self.positioning_mode == POSITIONING_MODE_MIRROR:
       azimuth_degrees_min, azimuth_degrees_max = self.mirror_positioning['azimuth_angle_bound']
@@ -226,6 +234,36 @@ class Searchlight(object):
     self.motor_controller.go(ELEVATION_CHANNEL, value)
     self.config.elevation_lower_bound = value
     self.config_store.commit()
+
+  @unwrap_osc
+  def osc_azimuth_lower_limit(self, value):
+    assert 0 <= value and value <= 1, 'Invalid osc_azimuth_lower_limit value: %s' % value
+    value = clamp_and_scale(value, 0, 1, -1, 1)
+    if value > self.config.azimuth_upper_bound:
+        value = self.config.azimuth_upper_bound
+    self.motor_controller.go(AZIMUTH_CHANNEL, value)
+    self.config.azimuth_lower_bound = value
+    self.config_store.commit()
+
+  @unwrap_osc
+  def osc_azimuth_upper_limit(self, value):
+    assert 0 <= value and value <= 1, 'Invalid osc_azimuth_upper_limit value: %s' % value
+    value = clamp_and_scale(value, 0, 1, -1, 1)
+    if value < self.config.azimuth_lower_bound:
+        value = self.config.azimuth_lower_bound
+    self.motor_controller.go(AZIMUTH_CHANNEL, value)
+    self.config.azimuth_upper_bound = value
+    self.config_store.commit()
+
+  @unwrap_osc
+  def osc_limit_reset(self, value):
+    self.config.azimuth_lower_bound = -1
+    self.config.azimuth_upper_bound = 1
+    self.config.elevation_lower_bound = -1
+    self.config.elevation_upper_bound = 1
+    self.config_store.commit()
+    self.motor_controller.go(AZIMUTH_CHANNEL, 0)
+    self.motor_controller.go(ELEVATION_CHANNEL, 0)
 
   def _osc_draw_grid(self, x, y):
     # TODO(robgaunt): This be some magic.
